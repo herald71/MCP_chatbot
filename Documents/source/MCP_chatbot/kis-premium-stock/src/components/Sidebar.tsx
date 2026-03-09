@@ -23,6 +23,10 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             </div>
 
             <nav className={styles.nav}>
+                <Link href="/assistant" className={`${styles.navItem} ${pathname === '/assistant' ? styles.active : ''}`}>
+                    <span className={styles.icon}>🤖</span>
+                    {!isCollapsed && <span className={styles.navText}>AI Assistant</span>}
+                </Link>
                 <Link href="/" className={`${styles.navItem} ${pathname === '/' ? styles.active : ''}`}>
                     <span className={styles.icon}>📊</span>
                     {!isCollapsed && <span className={styles.navText}>Dashboard</span>}
@@ -30,10 +34,6 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 <Link href="/quant" className={`${styles.navItem} ${pathname === '/quant' ? styles.active : ''}`}>
                     <span className={styles.icon}>🔬</span>
                     {!isCollapsed && <span className={styles.navText}>Quant Lab</span>}
-                </Link>
-                <Link href="/assistant" className={`${styles.navItem} ${pathname === '/assistant' ? styles.active : ''}`}>
-                    <span className={styles.icon}>🤖</span>
-                    {!isCollapsed && <span className={styles.navText}>AI Assistant</span>}
                 </Link>
             </nav>
         </aside>

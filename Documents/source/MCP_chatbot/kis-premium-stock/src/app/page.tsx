@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import styles from "./page.module.css";
-import AIAssistant from "../components/AIAssistant";
 import PortfolioChart from "../components/PortfolioChart";
 import StockModal from "../components/StockModal";
 
@@ -279,12 +278,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        {/* AI Assistant Widget */}
-        <div className={`glass-panel ${styles.widget} ${styles.aiWidget}`}>
-          <h3 className={styles.widgetTitle}>프리미엄 AI 어시스턴트</h3>
-          <AIAssistant />
-        </div>
       </div>
 
       <StockModal
@@ -293,6 +286,6 @@ export default function Home() {
         stockCode={selectedStock?.code || ''}
         stockName={selectedStock?.name || ''}
       />
-    </div>
+    </div >
   );
 }
