@@ -33,11 +33,15 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
         if (overseasBalance?.output1 && Array.isArray(overseasBalance.output1)) {
             overseasBalance.output1.forEach((item: any) => {
                 // Overseas evaluation amount (KRW) usually in evlu_amt_smtl
-                const evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
+                let evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
                 const evalUSD = Number(item.ovrs_cblc_evlu_amt || 0);
 
-                // Even if KRW eval is 0 (demo acc issues), if we have USD, let's show it
-                if (evalAmt > 0 || evalUSD > 0) {
+                // If KRW eval is 0 but USD eval exists, use a rough exchange rate for chart scaling
+                if (evalAmt === 0 && evalUSD > 0) {
+                    evalAmt = evalUSD * 1400;
+                }
+
+                if (evalAmt > 0) {
                     result.push({
                         name: item.ovrs_item_name || item.ovrs_pdno || 'Unknown',
                         value: evalAmt, // For chart slice size
