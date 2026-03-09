@@ -23,11 +23,11 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             </div>
 
             <nav className={styles.nav}>
-                <Link href="/assistant" className={`${styles.navItem} ${pathname === '/assistant' ? styles.active : ''}`}>
+                <Link href="/" className={`${styles.navItem} ${pathname === '/' ? styles.active : ''}`}>
                     <span className={styles.icon}>🤖</span>
                     {!isCollapsed && <span className={styles.navText}>AI Assistant</span>}
                 </Link>
-                <Link href="/" className={`${styles.navItem} ${pathname === '/' ? styles.active : ''}`}>
+                <Link href="/dashboard" className={`${styles.navItem} ${pathname === '/dashboard' ? styles.active : ''}`}>
                     <span className={styles.icon}>📊</span>
                     {!isCollapsed && <span className={styles.navText}>Dashboard</span>}
                 </Link>
