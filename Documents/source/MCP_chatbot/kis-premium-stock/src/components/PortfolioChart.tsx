@@ -15,13 +15,14 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
         const result: any[] = [];
 
         // 1. Domestic Stocks
-        if (balance?.output1 && balance.output1.length > 0) {
+        if (balance?.output1 && Array.isArray(balance.output1)) {
             balance.output1.forEach((item: any) => {
-                if (Number(item.evlu_amt) > 0) {
+                const evalAmt = Number(item.evlu_amt || 0);
+                if (evalAmt > 0) {
                     result.push({
                         name: item.prdt_name || item.pdno || 'Unknown',
-                        value: Number(item.evlu_amt),
-                        pnlRt: item.evlu_pfls_rt,
+                        value: evalAmt,
+                        pnlRt: item.evlu_pfls_rt || '0.00',
                         type: 'Domestic'
                     });
                 }
@@ -29,7 +30,7 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
         }
 
         // 2. Overseas Stocks
-        if (overseasBalance?.output1 && overseasBalance.output1.length > 0) {
+        if (overseasBalance?.output1 && Array.isArray(overseasBalance.output1)) {
             overseasBalance.output1.forEach((item: any) => {
                 // Overseas evaluation amount (KRW) usually in evlu_amt_smtl
                 const evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
@@ -37,14 +38,14 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                     result.push({
                         name: item.ovrs_item_name || item.ovrs_pdno || 'Unknown',
                         value: evalAmt,
-                        pnlRt: item.evlu_pfls_rt || item.evlu_pfls_rt1,
+                        pnlRt: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
                         type: 'Overseas'
                     });
                 }
             });
         }
 
-        return result.sort((a: any, b: any) => b.value - a.value); // Sort by largest holding
+        return result.sort((a: any, b: any) => (b.value || 0) - (a.value || 0)); // Sort by largest holding
     }, [balance, overseasBalance]);
 
     if (data.length === 0) {

@@ -127,33 +127,33 @@ export default function Home() {
   // 국내/해외 통합 보유 종목 리스트 가공
   const holdings = useMemo(() => {
     const list: any[] = [];
-    if (balance?.output1) {
+    if (balance?.output1 && Array.isArray(balance.output1)) {
       balance.output1.forEach((item: any) => {
         if (Number(item.hldg_qty) > 0) {
           list.push({
-            name: item.prdt_name,
-            qty: item.hldg_qty,
-            eval: Number(item.evlu_amt),
-            pnl: item.evlu_pfls_rt,
+            name: item.prdt_name || '알 수 없음',
+            qty: item.hldg_qty || '0',
+            eval: Number(item.evlu_amt || 0),
+            pnl: item.evlu_pfls_rt || '0.00',
             type: 'Domestic'
           });
         }
       });
     }
-    if (overseasBalance?.output1) {
+    if (overseasBalance?.output1 && Array.isArray(overseasBalance.output1)) {
       overseasBalance.output1.forEach((item: any) => {
         if (Number(item.ovrs_cblc_qty) > 0) {
           list.push({
-            name: item.ovrs_item_name,
-            qty: item.ovrs_cblc_qty,
-            eval: Number(item.evlu_amt_smtl || 0),
-            pnl: item.evlu_pfls_rt,
+            name: item.ovrs_item_name || '알 수 없음',
+            qty: item.ovrs_cblc_qty || '0',
+            eval: Number(item.evlu_amt_smtl || item.evlu_amt || 0),
+            pnl: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
             type: 'Overseas'
           });
         }
       });
     }
-    return list.sort((a, b) => b.eval - a.eval);
+    return list.sort((a, b) => (b.eval || 0) - (a.eval || 0));
   }, [balance, overseasBalance]);
 
   return (
