@@ -124,6 +124,38 @@ export default function Home() {
   const overseasProfitUSD = overseasBalance?.output2?.ovrs_tot_pfls; // 총 손익
   const isPositiveOverseas = Number(overseasProfitUSD) > 0;
 
+  // 국내/해외 통합 보유 종목 리스트 가공
+  const holdings = useMemo(() => {
+    const list: any[] = [];
+    if (balance?.output1) {
+      balance.output1.forEach((item: any) => {
+        if (Number(item.hldg_qty) > 0) {
+          list.push({
+            name: item.prdt_name,
+            qty: item.hldg_qty,
+            eval: Number(item.evlu_amt),
+            pnl: item.evlu_pfls_rt,
+            type: 'Domestic'
+          });
+        }
+      });
+    }
+    if (overseasBalance?.output1) {
+      overseasBalance.output1.forEach((item: any) => {
+        if (Number(item.ovrs_cblc_qty) > 0) {
+          list.push({
+            name: item.ovrs_item_name,
+            qty: item.ovrs_cblc_qty,
+            eval: Number(item.evlu_amt_smtl || 0),
+            pnl: item.evlu_pfls_rt,
+            type: 'Overseas'
+          });
+        }
+      });
+    }
+    return list.sort((a, b) => b.eval - a.eval);
+  }, [balance, overseasBalance]);
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -197,7 +229,48 @@ export default function Home() {
           {loading ? (
             <div className={styles.placeholder}>데이터를 불러오는 중입니다...</div>
           ) : (
-            <PortfolioChart balance={balance} />
+            <PortfolioChart balance={balance} overseasBalance={overseasBalance} />
+          )}
+        </div>
+
+        {/* Assets List Widget */}
+        <div className={`glass-panel ${styles.widget} ${styles.holdingsWidget}`}>
+          <h3 className={styles.widgetTitle}>상세 보유 종목 현황</h3>
+          {loading ? (
+            <div className={styles.placeholder}>목록을 불러오는 중입니다...</div>
+          ) : holdings.length === 0 ? (
+            <div className={styles.emptyState}>보유 중인 종목이 없습니다.</div>
+          ) : (
+            <div className={styles.holdingsTableWrapper}>
+              <table className={styles.holdingsTable}>
+                <thead>
+                  <tr>
+                    <th>구분</th>
+                    <th>종목명</th>
+                    <th>보유수량</th>
+                    <th>평가금액(원화)</th>
+                    <th>수익률</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {holdings.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <span className={`${styles.stockTypeTag} ${item.type === 'Domestic' ? styles.domesticTag : styles.overseasTag}`}>
+                          {item.type === 'Domestic' ? '국내' : '해외'}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{item.name}</td>
+                      <td>{Number(item.qty).toLocaleString()}</td>
+                      <td>{item.eval.toLocaleString()}원</td>
+                      <td style={{ color: Number(item.pnl) > 0 ? 'var(--danger-color)' : Number(item.pnl) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 700 }}>
+                        {Number(item.pnl) > 0 ? '+' : ''}{item.pnl}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
