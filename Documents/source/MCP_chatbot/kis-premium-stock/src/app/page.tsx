@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import styles from "./page.module.css";
 import AIAssistant from "../components/AIAssistant";
 import PortfolioChart from "../components/PortfolioChart";
