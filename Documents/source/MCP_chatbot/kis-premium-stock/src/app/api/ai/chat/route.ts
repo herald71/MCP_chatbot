@@ -2015,6 +2015,22 @@ export async function POST(req: Request) {
                         } catch (e) {
                             messages.push({ tool_call_id: toolCall.id, role: 'tool', name: 'get_index_price', content: "지수 정보 조회 중 오류 발생" });
                         }
+                    } else if (toolCall.function.name === 'search_web') {
+                        const args = JSON.parse(toolCall.function.arguments);
+                        try {
+                            const result = await searchWeb(args.query);
+                            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: 'search_web', content: result });
+                        } catch (e) {
+                            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: 'search_web', content: "웹 검색 중 오류가 발생했습니다." });
+                        }
+                    } else {
+                        // 정의되지 않은 도구가 호출된 경우에도 빈 응답이라도 보내서 API 에러 방지
+                        messages.push({
+                            tool_call_id: toolCall.id,
+                            role: 'tool',
+                            name: toolCall.function.name,
+                            content: "지원하지 않는 기능입니다.",
+                        });
                     }
                 }
                 // 루프를 계속 돌아서 도구 실행 결과를 바탕으로 다음 단계를 판단하도록 함
