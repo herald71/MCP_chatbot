@@ -7,12 +7,44 @@
     font-size: 14px;
 }
 
+.multiChartWrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.chartBox {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+}
+
+.chartTitle {
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
 .chartContainer {
     flex: 1;
     width: 100%;
-    height: 350px;
-    /* 고정 높이 할당 (필요 시 조절) */
-    margin-top: 10px;
+    min-height: 350px;
+}
+
+.smallEmpty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
 }
 
 .customTooltip {

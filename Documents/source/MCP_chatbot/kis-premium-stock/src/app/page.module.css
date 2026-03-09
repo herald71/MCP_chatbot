@@ -238,8 +238,8 @@
 
 /* Chart widget */
 .chartWidget {
-  grid-column: span 2;
-  min-height: 480px;
+  grid-column: span 3;
+  min-height: 520px;
 }
 
 .placeholder {

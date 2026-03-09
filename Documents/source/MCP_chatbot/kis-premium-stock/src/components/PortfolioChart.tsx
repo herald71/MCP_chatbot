@@ -11,10 +11,9 @@ const COLORS = ['#4361ee', '#f72585', '#3a0ca3', '#7209b7', '#4cc9f0', '#ffde2a'
 
 export default function PortfolioChart({ balance, overseasBalance }: PortfolioChartProps) {
     // Parsing real data from domestic and overseas output1
-    const data = useMemo(() => {
+    // 1. Domestic Stocks Data
+    const domesticData = useMemo(() => {
         const result: any[] = [];
-
-        // 1. Domestic Stocks
         if (balance?.output1 && Array.isArray(balance.output1)) {
             balance.output1.forEach((item: any) => {
                 const evalAmt = Number(item.evlu_amt || 0);
@@ -28,15 +27,17 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                 }
             });
         }
+        return result.sort((a, b) => b.value - a.value);
+    }, [balance]);
 
-        // 2. Overseas Stocks
+    // 2. Overseas Stocks Data
+    const overseasData = useMemo(() => {
+        const result: any[] = [];
         if (overseasBalance?.output1 && Array.isArray(overseasBalance.output1)) {
             overseasBalance.output1.forEach((item: any) => {
-                // Overseas evaluation amount (KRW) usually in evlu_amt_smtl
                 let evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
-                const evalUSD = Number(item.ovrs_stck_evlu_amt || 0); // Correct field for USD
+                const evalUSD = Number(item.ovrs_stck_evlu_amt || 0);
 
-                // If KRW eval is 0 but USD eval exists, use a rough exchange rate for chart scaling
                 if (evalAmt === 0 && evalUSD > 0) {
                     evalAmt = evalUSD * 1400;
                 }
@@ -44,19 +45,18 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                 if (evalAmt > 0) {
                     result.push({
                         name: item.ovrs_item_name || item.ovrs_pdno || 'Unknown',
-                        value: evalAmt, // For chart slice size
-                        valueUSD: evalUSD, // For tooltip
+                        value: evalAmt,
+                        valueUSD: evalUSD,
                         pnlRt: item.evlu_pfls_rt || '0.00',
                         type: 'Overseas'
                     });
                 }
             });
         }
+        return result.sort((a, b) => b.value - a.value);
+    }, [overseasBalance]);
 
-        return result.sort((a: any, b: any) => (b.value || 0) - (a.value || 0)); // Sort by largest holding
-    }, [balance, overseasBalance]);
-
-    if (data.length === 0) {
+    if (domesticData.length === 0 && overseasData.length === 0) {
         return (
             <div className={styles.emptyState}>
                 보유 주식이 없거나 잔고 데이터를 불러올 수 없습니다.
@@ -89,27 +89,68 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
     };
 
     return (
-        <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                    <Pie
-                        data={data}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius="55%"
-                        outerRadius="80%"
-                        paddingAngle={3}
-                        dataKey="value"
-                        stroke="none"
-                    >
-                        {data.map((entry: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-            </ResponsiveContainer>
+        <div className={styles.multiChartWrapper}>
+            {/* Domestic Chart */}
+            <div className={styles.chartBox}>
+                <h4 className={styles.chartTitle}>국내 주식 비중</h4>
+                {domesticData.length > 0 ? (
+                    <div className={styles.chartContainer}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={domesticData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius="50%"
+                                    outerRadius="75%"
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                    stroke="none"
+                                >
+                                    {domesticData.map((entry: any, index: number) => (
+                                        <Cell key={`cell-dom-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <div className={styles.smallEmpty}>국내 보유 종목이 없습니다.</div>
+                )}
+            </div>
+
+            {/* Overseas Chart */}
+            <div className={styles.chartBox}>
+                <h4 className={styles.chartTitle}>해외 주식 비중</h4>
+                {overseasData.length > 0 ? (
+                    <div className={styles.chartContainer}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={overseasData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius="50%"
+                                    outerRadius="75%"
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                    stroke="none"
+                                >
+                                    {overseasData.map((entry: any, index: number) => (
+                                        <Cell key={`cell-ovs-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <div className={styles.smallEmpty}>해외 보유 종목이 없습니다.</div>
+                )}
+            </div>
         </div>
     );
 }
