@@ -7,7 +7,27 @@ interface PortfolioChartProps {
     overseasBalance?: any;
 }
 
-const COLORS = ['#4361ee', '#f72585', '#3a0ca3', '#7209b7', '#4cc9f0', '#ffde2a', '#00b4d8', '#00d2ff', '#4ade80'];
+const DOMESTIC_COLORS = [
+    '#4361ee', // 메인 블루
+    '#3a0ca3', // 딥 퍼플
+    '#7209b7', // 바이올렛
+    '#b5179e', // 마젠타
+    '#4cc9f0', // 스카이 블루
+    '#560bad', // 로얄 퍼플
+    '#4895ef', // 라이트 블루
+    '#3f37c9'  // 인디고
+];
+
+const OVERSEAS_COLORS = [
+    '#ffde2a', // 브라이트 옐로우
+    '#4ade80', // 네온 그린
+    '#f72585', // 핫 핑크
+    '#fb8500', // 오렌지
+    '#2ec4b6', // 틸
+    '#ff9f1c', // 선셋 오렌지
+    '#00f5d4', // 터쿼이즈
+    '#fee440'  // 레몬
+];
 
 export default function PortfolioChart({ balance, overseasBalance }: PortfolioChartProps) {
     // Parsing real data from domestic and overseas output1
@@ -108,7 +128,12 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                                     stroke="none"
                                 >
                                     {domesticData.map((entry: any, index: number) => (
-                                        <Cell key={`cell-dom-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        <Cell
+                                            key={`cell-dom-${index}`}
+                                            fill={DOMESTIC_COLORS[index % DOMESTIC_COLORS.length]}
+                                            stroke="rgba(255,255,255,0.1)"
+                                            strokeWidth={1}
+                                        />
                                     ))}
                                 </Pie>
                                 <Tooltip content={<CustomTooltip />} />
@@ -139,7 +164,12 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                                     stroke="none"
                                 >
                                     {overseasData.map((entry: any, index: number) => (
-                                        <Cell key={`cell-ovs-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                                        <Cell
+                                            key={`cell-ovs-${index}`}
+                                            fill={OVERSEAS_COLORS[index % OVERSEAS_COLORS.length]}
+                                            stroke="rgba(255,255,255,0.1)"
+                                            strokeWidth={1}
+                                        />
                                     ))}
                                 </Pie>
                                 <Tooltip content={<CustomTooltip />} />
