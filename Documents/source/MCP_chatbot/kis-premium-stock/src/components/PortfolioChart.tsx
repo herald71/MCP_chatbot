@@ -34,7 +34,7 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
             overseasBalance.output1.forEach((item: any) => {
                 // Overseas evaluation amount (KRW) usually in evlu_amt_smtl
                 let evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
-                const evalUSD = Number(item.ovrs_cblc_evlu_amt || 0);
+                const evalUSD = Number(item.ovrs_stck_evlu_amt || 0); // Correct field for USD
 
                 // If KRW eval is 0 but USD eval exists, use a rough exchange rate for chart scaling
                 if (evalAmt === 0 && evalUSD > 0) {
@@ -46,7 +46,7 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                         name: item.ovrs_item_name || item.ovrs_pdno || 'Unknown',
                         value: evalAmt, // For chart slice size
                         valueUSD: evalUSD, // For tooltip
-                        pnlRt: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
+                        pnlRt: item.evlu_pfls_rt || '0.00',
                         type: 'Overseas'
                     });
                 }

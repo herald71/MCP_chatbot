@@ -147,8 +147,8 @@ export default function Home() {
             name: item.ovrs_item_name || '알 수 없음',
             qty: item.ovrs_cblc_qty || '0',
             eval: Number(item.evlu_amt_smtl || item.evlu_amt || 0), // 차트 정렬용 원화
-            evalUSD: Number(item.ovrs_cblc_evlu_amt || 0), // 표시용 달러
-            pnl: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
+            evalUSD: Number(item.ovrs_stck_evlu_amt || 0), // 표시용 달러 (수정됨)
+            pnl: item.evlu_pfls_rt || '0.00',
             type: 'Overseas'
           });
         }
