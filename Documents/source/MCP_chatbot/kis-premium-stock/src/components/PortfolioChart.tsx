@@ -34,10 +34,14 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
             overseasBalance.output1.forEach((item: any) => {
                 // Overseas evaluation amount (KRW) usually in evlu_amt_smtl
                 const evalAmt = Number(item.evlu_amt_smtl || item.evlu_amt || 0);
-                if (evalAmt > 0) {
+                const evalUSD = Number(item.ovrs_cblc_evlu_amt || 0);
+
+                // Even if KRW eval is 0 (demo acc issues), if we have USD, let's show it
+                if (evalAmt > 0 || evalUSD > 0) {
                     result.push({
                         name: item.ovrs_item_name || item.ovrs_pdno || 'Unknown',
-                        value: evalAmt,
+                        value: evalAmt, // For chart slice size
+                        valueUSD: evalUSD, // For tooltip
                         pnlRt: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
                         type: 'Overseas'
                     });
@@ -66,7 +70,10 @@ export default function PortfolioChart({ balance, overseasBalance }: PortfolioCh
                 <div className={styles.customTooltip}>
                     <p className={styles.tooltipTitle}>{dataInfo.name}</p>
                     <p className={styles.tooltipValue}>
-                        평가액: {dataInfo.value.toLocaleString('ko-KR')}원
+                        평가액: {dataInfo.type === 'Domestic'
+                            ? `${dataInfo.value.toLocaleString('ko-KR')}원`
+                            : `$${(dataInfo.valueUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        }
                     </p>
                     <p className={`${styles.tooltipRate} ${isUp ? styles.up : isDown ? styles.down : ''}`}>
                         수익률: {dataInfo.pnlRt}%

@@ -146,7 +146,8 @@ export default function Home() {
           list.push({
             name: item.ovrs_item_name || '알 수 없음',
             qty: item.ovrs_cblc_qty || '0',
-            eval: Number(item.evlu_amt_smtl || item.evlu_amt || 0),
+            eval: Number(item.evlu_amt_smtl || item.evlu_amt || 0), // 차트 정렬용 원화
+            evalUSD: Number(item.ovrs_cblc_evlu_amt || 0), // 표시용 달러
             pnl: item.evlu_pfls_rt || item.evlu_pfls_rt1 || '0.00',
             type: 'Overseas'
           });
@@ -248,7 +249,7 @@ export default function Home() {
                     <th>구분</th>
                     <th>종목명</th>
                     <th>보유수량</th>
-                    <th>평가금액(원화)</th>
+                    <th>평가금액</th>
                     <th>수익률</th>
                   </tr>
                 </thead>
@@ -262,7 +263,12 @@ export default function Home() {
                       </td>
                       <td style={{ fontWeight: 600 }}>{item.name}</td>
                       <td>{Number(item.qty).toLocaleString()}</td>
-                      <td>{item.eval.toLocaleString()}원</td>
+                      <td>
+                        {item.type === 'Domestic'
+                          ? `${item.eval.toLocaleString()}원`
+                          : `$${(item.evalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        }
+                      </td>
                       <td style={{ color: Number(item.pnl) > 0 ? 'var(--danger-color)' : Number(item.pnl) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 700 }}>
                         {Number(item.pnl) > 0 ? '+' : ''}{item.pnl}%
                       </td>
