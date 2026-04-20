@@ -5,6 +5,7 @@ import yaml from 'js-yaml';
 // 실전투자(real) 환경용 YAML 파일에서 설정값 로드
 const findConfig = () => {
     const possiblePaths = [
+        path.resolve(process.cwd(), 'kis_devlp.yaml'), // 현재 작업 디렉토리 우선
         'c:/Users/01999/Documents/source/OpenAPI_trading/kis_devlp.yaml', // 가장 확실한 절대 경로 우선
         path.resolve(process.cwd(), '..', '..', 'OpenAPI_trading', 'kis_devlp.yaml'),
         path.resolve(process.cwd(), '..', 'OpenAPI_trading', 'kis_devlp.yaml'),
