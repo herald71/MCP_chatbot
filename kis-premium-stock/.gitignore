@@ -39,8 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# KIS
 .kis_token.json
 kis_devlp.yaml
 node-v24.14.1-win-x64/
