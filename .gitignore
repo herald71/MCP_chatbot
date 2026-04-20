@@ -35,6 +35,11 @@ yarn-error.log*
 
 # 민감 파일 (API 토큰, 인증 정보)
 .kis_token.json
+kis_devlp.yaml
+
+# 로컬 실행 환경
+node-v24.14.1-win-x64/
+kis-premium-stock/
 
 # 디버그/테스트 파일
 debug_*.js

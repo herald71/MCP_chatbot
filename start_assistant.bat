@@ -1,12 +1,9 @@
 @echo off
 title AI Assistant Quick Start
 
-:: Move to project directory
-cd /d "%~dp0"
-
-echo ==========================================
-echo    Starting AI Assistant...
-echo ==========================================
+:: Set portable node path
+set "NODE_PATH=%~dp0node-v24.14.1-win-x64"
+set "PATH=%NODE_PATH%;%PATH%"
 
 :: Check node_modules
 if not exist "node_modules\" (
@@ -22,6 +19,6 @@ start /b cmd /c "timeout /t 5 >nul && start http://localhost:3000"
 
 :: Start Server
 echo Running "npm run dev"...
-npm run dev
+call npm run dev
 
 pause
