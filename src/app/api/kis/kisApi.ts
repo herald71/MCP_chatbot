@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import crypto from 'crypto';
 
 // 실전투자(real) 환경용 YAML 파일에서 설정값 로드
 const findConfig = () => {
     const possiblePaths = [
-        path.resolve(process.cwd(), 'kis_devlp.yaml'), // 현재 작업 디렉토리 (가장 권장됨)
+        path.resolve(process.cwd(), 'kis_devlp.yaml'), // 현재 작업 디렉토리
         'c:/Users/owner/Documents/source/MCP_chatbot/kis_devlp.yaml', // 현재 사용자 경로
-        'c:/Users/01999/Documents/source/OpenAPI_trading/kis_devlp.yaml',
+        'c:/Users/01999/Documents/source/OpenAPI_trading/kis_devlp.yaml', // 대체 경로
         path.resolve(process.cwd(), '..', '..', 'OpenAPI_trading', 'kis_devlp.yaml'),
     ];
 
@@ -24,10 +25,32 @@ const findConfig = () => {
 const configPath = findConfig();
 
 let configInfo: any = null;
+let accounts: { name: string, cano: string, prdt: string, appkey?: string, appsecret?: string }[] = [];
+
 if (configPath) {
     try {
         const fileContents = fs.readFileSync(configPath, 'utf8');
         configInfo = yaml.load(fileContents);
+
+        if (configInfo) {
+            // 여러 계좌 정보 처리
+            if (Array.isArray(configInfo.accounts)) {
+                accounts = configInfo.accounts.map((acc: any) => ({
+                    name: String(acc.name || '계좌'),
+                    cano: String(acc.cano),
+                    prdt: String(acc.prdt || '01').padStart(2, '0'),
+                    appkey: acc.appkey,
+                    appsecret: acc.appsecret
+                }));
+            } else if (configInfo.my_acct_stock) {
+                // 기존 단일 계좌 설정이 있을 경우 기본값으로 추가
+                accounts = [{
+                    name: '기본 계좌',
+                    cano: String(configInfo.my_acct_stock),
+                    prdt: String(configInfo.my_prod || '01').padStart(2, '0')
+                }];
+            }
+        }
     } catch (e: any) {
         console.error(`[KIS Config] YAML 로드 실패 (${configPath}):`, e.message);
     }
@@ -35,18 +58,40 @@ if (configPath) {
 
 export const KIS_REAL_BASE_URL = 'https://openapi.koreainvestment.com:9443';
 export const KIS_CONFIG = configInfo;
+export const KIS_ACCOUNTS = accounts;
 
-// 메모리 전역 캐싱 (동시 요청 병합 적용)
-let cachedToken: string | null = null;
-let tokenExpiresAt: number = 0; // ms
-let tokenFetchPromise: Promise<string> | null = null;
+/**
+ * 특정 계좌번호에 맞는 AppKey와 AppSecret을 반환합니다.
+ * 계좌 전용 키가 없으면 글로벌 키(my_app, my_sec)를 반환합니다.
+ */
+export function getAccountKeys(cano: string) {
+    const acc = accounts.find(a => a.cano === cano);
+    if (acc && acc.appkey && acc.appsecret) {
+        return { appkey: acc.appkey, appsecret: acc.appsecret };
+    }
+    return {
+        appkey: configInfo?.my_app,
+        appsecret: configInfo?.my_sec
+    };
+}
 
-const tokenCachePath = path.resolve('.kis_token.json');
+// 메모리 캐싱 (앱키별로 관리)
+const cachedTokens: Record<string, { token: string, expiresAt: number }> = {};
+const tokenFetchPromises: Record<string, Promise<string> | null> = {};
 
-export async function getKisToken(retryCount = 0): Promise<string> {
+export async function getKisToken(appkey?: string, appsecret?: string, retryCount = 0): Promise<string> {
+    const finalKey = appkey || configInfo?.my_app;
+    const finalSecret = appsecret || configInfo?.my_sec;
+
+    if (!finalKey || !finalSecret) {
+        throw new Error("KIS API AppKey 또는 AppSecret이 없습니다.");
+    }
+
+    const keyHash = crypto.createHash('md5').update(finalKey).digest('hex').substring(0, 8);
+    const tokenCachePath = path.resolve(`.kis_token_${keyHash}.json`);
     const now = Date.now();
 
-    // 1. 파일 캐시 확인 (다중 프로세스/스레드 공유용)
+    // 1. 파일 캐시 확인
     try {
         if (fs.existsSync(tokenCachePath)) {
             const cache = JSON.parse(fs.readFileSync(tokenCachePath, 'utf8'));
@@ -55,41 +100,35 @@ export async function getKisToken(retryCount = 0): Promise<string> {
             }
         }
     } catch (e) {
-        console.error("Token cache read error:", e);
+        console.error(`Token cache read error (${keyHash}):`, e);
     }
 
-    // 2. 캐시 메모리 확인 (단일 스레드 최적화)
-    if (cachedToken && now < tokenExpiresAt) {
-        return cachedToken;
+    // 2. 메모리 캐시 확인
+    if (cachedTokens[keyHash] && now < cachedTokens[keyHash].expiresAt) {
+        return cachedTokens[keyHash].token;
     }
-    if (tokenFetchPromise) {
-        return tokenFetchPromise;
+    if (tokenFetchPromises[keyHash]) {
+        return tokenFetchPromises[keyHash]!;
     }
 
     const fetchToken = async () => {
-        if (!configInfo) throw new Error("KIS API 설정 정보가 없습니다.");
-
-        const APP_KEY = configInfo.my_app;
-        const APP_SECRET = configInfo.my_sec;
-        const URL_BASE = configInfo.prod || KIS_REAL_BASE_URL;
+        const URL_BASE = configInfo?.prod || KIS_REAL_BASE_URL;
 
         const res = await fetch(`${URL_BASE}/oauth2/tokenP`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 grant_type: 'client_credentials',
-                appkey: APP_KEY,
-                appsecret: APP_SECRET,
+                appkey: finalKey,
+                appsecret: finalSecret,
             })
         });
 
         if (!res.ok) {
             const errText = await res.text();
-            // 동시 발급 초과(EGW00133) 회피 로직
             if (errText.includes('EGW00133') && retryCount < 5) {
-                console.log(`[Token] EGW00133 발생. 1초 대기 후 폴링 재시도 (${retryCount + 1}/5)...`);
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                return getKisToken(retryCount + 1);
+                return getKisToken(finalKey, finalSecret, retryCount + 1);
             }
             throw new Error(`토큰 발급 실패: ${errText}`);
         }
@@ -98,10 +137,8 @@ export async function getKisToken(retryCount = 0): Promise<string> {
         const access_token = data.access_token;
         const expiresAt = now + (data.expires_in * 1000) - 60000;
 
-        cachedToken = access_token;
-        tokenExpiresAt = expiresAt;
+        cachedTokens[keyHash] = { token: access_token, expiresAt };
 
-        // 파일 캐시에 기록
         try {
             fs.writeFileSync(tokenCachePath, JSON.stringify({ token: access_token, expiresAt }), 'utf8');
         } catch (e) {
@@ -111,9 +148,9 @@ export async function getKisToken(retryCount = 0): Promise<string> {
         return access_token;
     };
 
-    tokenFetchPromise = fetchToken().finally(() => {
-        tokenFetchPromise = null;
+    tokenFetchPromises[keyHash] = fetchToken().finally(() => {
+        tokenFetchPromises[keyHash] = null;
     });
 
-    return tokenFetchPromise;
+    return tokenFetchPromises[keyHash]!;
 }

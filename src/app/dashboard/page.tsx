@@ -12,18 +12,54 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [selectedStock, setSelectedStock] = useState<{ code: string, name: string } | null>(null);
   const [holdingPrices, setHoldingPrices] = useState<Record<string, any>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  // 계좌 관련 상태
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<any>(null);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+
+  // 계좌 목록 가져오기
+  useEffect(() => {
+    async function fetchAccounts() {
+      try {
+        const res = await fetch("/api/kis/accounts");
+        if (res.ok) {
+          const data = await res.json();
+          setAccounts(data);
+          if (data.length > 0) {
+            // 로컬 스토리지에서 마지막 선택 계좌 복원 시도
+            const lastCano = localStorage.getItem('last_cano');
+            const found = data.find((a: any) => a.cano === lastCano);
+            setSelectedAccount(found || data[0]);
+          }
+        }
+      } catch (e) {
+        console.error("Fetch Accounts Error:", e);
+      }
+    }
+    fetchAccounts();
+  }, []);
 
   useEffect(() => {
     async function fetchBalance() {
+      if (!selectedAccount) return;
+      setLoading(true);
+      setError(null);
       try {
+        const query = `cano=${selectedAccount.cano}&prdt=${selectedAccount.prdt}`;
         const [res, resOverseas, resMarket] = await Promise.all([
-          fetch("/api/kis/balance"),
-          fetch("/api/kis/overseas-balance"),
+          fetch(`/api/kis/balance?${query}`),
+          fetch(`/api/kis/overseas-balance?${query}`),
           fetch("/api/kis/market-indices")
         ]);
 
         if (res.ok) {
           const data = await res.json();
+          if (data.rt_cd !== '0' && data.msg1) {
+            const displayError = data.msg_cd ? `[${data.msg_cd}] ${data.msg1}` : data.msg1;
+            setError(displayError);
+          }
           setBalance(data);
         }
 
@@ -44,7 +80,7 @@ export default function Home() {
     }
 
     fetchBalance();
-  }, []);
+  }, [selectedAccount]);
 
   // 종목 코드 (삼성전자, SK하이닉스, 현대차)
   const watchListCodes = [
@@ -235,8 +271,39 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Welcome back, <span className="gradient-text">Investor</span> 👋</h1>
-        <p className={styles.subtitle}>오늘의 <span className="gradient-text">프리미엄</span> 자산 현황과 주요 증시 변동을 확인하세요.</p>
+        <div className={styles.headerText}>
+          <h1 className={styles.title}>Welcome back, <span className="gradient-text">Investor</span> 👋</h1>
+          <p className={styles.subtitle}>오늘의 <span className="gradient-text">프리미엄</span> 자산 현황과 주요 증시 변동을 확인하세요.</p>
+        </div>
+
+        {/* Account Selector */}
+        <div className={styles.accountSelector} onClick={() => setIsAccountOpen(!isAccountOpen)}>
+          <div className={styles.accountInfo}>
+            <span className={styles.accountLabel}>Selected Account</span>
+            <span className={styles.accountName}>{selectedAccount?.name || 'Loading...'}</span>
+          </div>
+          <span className={styles.accountChevron}>{isAccountOpen ? '▲' : '▼'}</span>
+
+          {isAccountOpen && (
+            <div className={styles.dropdown}>
+              {accounts.map((acc, idx) => (
+                <div
+                  key={idx}
+                  className={`${styles.dropdownItem} ${selectedAccount?.cano === acc.cano ? styles.active : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAccount(acc);
+                    localStorage.setItem('last_cano', acc.cano);
+                    setIsAccountOpen(false);
+                  }}
+                >
+                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{acc.name}</span>
+                  <span style={{ fontSize: '11px', opacity: 0.6 }}>{acc.cano}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Market Indices Bar */}
@@ -282,6 +349,11 @@ export default function Home() {
       <div className={styles.dashboardGrid}>
         <div className={`glass-panel ${styles.widget} ${styles.assetWidget}`}>
           <h3 className={styles.widgetTitle}>국내 자산 평가액</h3>
+          {error && (
+            <div style={{ color: '#ff4d4f', fontSize: '0.8rem', marginBottom: '10px', padding: '5px 10px', background: 'rgba(255, 77, 79, 0.1)', borderRadius: '4px', border: '1px solid rgba(255, 77, 79, 0.2)' }}>
+              ⚠️ KIS: {error}
+            </div>
+          )}
           {loading ? (
             <div className={styles.assetValue}>불러오는 중...</div>
           ) : (

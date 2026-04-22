@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server';
-import { getKisToken, KIS_CONFIG, KIS_REAL_BASE_URL } from '../kisApi';
+import { getKisToken, KIS_CONFIG, KIS_REAL_BASE_URL, getAccountKeys } from '../kisApi';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const queryCano = searchParams.get('cano');
+    const queryPrdt = searchParams.get('prdt');
+
     if (!KIS_CONFIG) {
         return NextResponse.json({ error: "KIS API 설정 정보가 없습니다." }, { status: 500 });
     }
-    const APP_KEY = KIS_CONFIG.my_app;
-    const APP_SECRET = KIS_CONFIG.my_sec;
-    const CANO = String(KIS_CONFIG.my_acct_stock);
-    const ACNT_PRDT_CD = String(KIS_CONFIG.my_prod).padStart(2, '0');
+
+    const CANO = queryCano || String(KIS_CONFIG.my_acct_stock);
+    const ACNT_PRDT_CD = (queryPrdt || String(KIS_CONFIG.my_prod)).padStart(2, '0');
     const URL_BASE = KIS_CONFIG.prod || KIS_REAL_BASE_URL;
+
+    // 계좌 정용 키 가져오기
+    const { appkey, appsecret } = getAccountKeys(CANO);
 
     try {
         // 1. KIS 인증 토큰 발급 (캐싱 전략 사용)
-        const accessToken = await getKisToken();
+        const accessToken = await getKisToken(appkey, appsecret);
 
         // 2. 실전투자 해외 주식 잔고조회 호출 (inquire_balance)
         const tr_id = 'JTTT3012R'; // 해외주식 잔고 (실전)
@@ -23,18 +29,14 @@ export async function GET() {
             headers: {
                 'Content-Type': 'application/json',
                 'authorization': `Bearer ${accessToken}`,
-                'appkey': APP_KEY,
-                'appsecret': APP_SECRET,
+                'appkey': appkey,
+                'appsecret': appsecret,
                 'tr_id': tr_id,
             }
         });
 
-        if (!balanceRes.ok) {
-            const errText = await balanceRes.text();
-            throw new Error(`해외 잔고 조회 API 호출 실패: ${errText}`);
-        }
         const balanceData = await balanceRes.json();
-
+        console.log(`[Overseas Balance API] KIS Response for ${CANO}:`, balanceData.rt_cd, balanceData.msg_cd, balanceData.msg1);
         return NextResponse.json(balanceData);
 
     } catch (error: any) {

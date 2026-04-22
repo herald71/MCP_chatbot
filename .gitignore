@@ -34,7 +34,8 @@ yarn-error.log*
 .env*
 
 # 민감 파일 (API 토큰, 인증 정보)
-.kis_token.json
+# 민감 파일 (API 토큰, 인증 정보)
+.kis_token*.json
 kis_devlp.yaml
 
 # 로컬 실행 환경
