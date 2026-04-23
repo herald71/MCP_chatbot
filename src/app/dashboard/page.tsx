@@ -19,6 +19,31 @@ export default function Home() {
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
 
+  // 정렬 관련 상태 (국내/해외 분리)
+  const [domesticSortConfig, setDomesticSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({
+    key: 'eval',
+    direction: 'desc'
+  });
+
+  const [overseasSortConfig, setOverseasSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({
+    key: 'eval',
+    direction: 'desc'
+  });
+
+  const handleDomesticSort = (key: string) => {
+    setDomesticSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const handleOverseasSort = (key: string) => {
+    setOverseasSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
   // 계좌 목록 가져오기
   useEffect(() => {
     async function fetchAccounts() {
@@ -200,31 +225,84 @@ export default function Home() {
     ? Number(balance.output2[0].tot_evlu_amt).toLocaleString('ko-KR')
     : "???";
 
-  // 일일 손익 금액 (모의투자: evlu_pfls_smtot_amt, 실전투자: asst_icdc_amt)
-  const totalProfitLossItem = balance?.output2?.[0]?.asst_icdc_amt || balance?.output2?.[0]?.evlu_pfls_smtot_amt;
-  const totalProfitLossNum = Number(totalProfitLossItem || 0);
-  const totalProfitLoss = typeof totalProfitLossItem !== "undefined"
-    ? `${totalProfitLossNum > 0 ? '+' : ''}${totalProfitLossNum.toLocaleString('ko-KR')}`
-    : "0";
+  // --- 국내 자산 데이터 가공 ---
+  let domTodayProfitNum = Number(balance?.output2?.[0]?.asst_icdc_amt || 0);
+  let domTotalProfitNum = Number(balance?.output2?.[0]?.evlu_pfls_smtot_amt || 0);
+  let domPchsAmtSum = Number(balance?.output2?.[0]?.pchs_amt_smtot_amt || 0);
+  let domBfdyAsset = Number(balance?.output2?.[0]?.bfdy_tot_asst_evlu_amt || 0);
 
-  // 일일 수익률 계산 (모의투자는 asst_icdc_dt_1, 실전은 전일 자산 대비 직접 계산)
-  let computedProfitRate = "0.00";
-  const bfdyTotal = Number(balance?.output2?.[0]?.bfdy_tot_asst_evlu_amt || 0);
-  if (bfdyTotal > 0) {
-    computedProfitRate = ((totalProfitLossNum / bfdyTotal) * 100).toFixed(2);
+  // 요약 정보가 0이거나 부정확할 경우 개별 종목 합산으로 보완
+  if (balance?.output1 && Array.isArray(balance.output1)) {
+    let sumToday = 0;
+    let sumTotal = 0;
+    let sumPchs = 0;
+    balance.output1.forEach((item: any) => {
+      const qty = Number(item.hldg_qty || 0);
+      if (qty > 0) {
+        // 실시간 시세 데이터가 있으면 우선 사용, 없으면 잔고 데이터 사용
+        const realChange = holdingPrices[item.pdno]?.change;
+        const dailyChange = realChange !== undefined ? Number(realChange) : Number(item.prdy_vrss || 0);
+
+        sumToday += (dailyChange * qty);
+        sumTotal += Number(item.evlu_pfls_amt || 0);
+        sumPchs += Number(item.pchs_amt || 0);
+      }
+    });
+    if (domTodayProfitNum === 0) domTodayProfitNum = sumToday;
+    if (domTotalProfitNum === 0) domTotalProfitNum = sumTotal;
+    if (domPchsAmtSum === 0) domPchsAmtSum = sumPchs;
   }
-  const profitRate = balance?.output2?.[0]?.asst_icdc_dt_1 || computedProfitRate;
 
-  const isPositive = totalProfitLossNum > 0;
+  // 국내 오늘 수익률
+  let domTodayRate = balance?.output2?.[0]?.asst_icdc_dt_1 || "0.00";
+  if ((domTodayRate === "0.00" || domTodayRate === "0") && domTodayProfitNum !== 0) {
+    if (domBfdyAsset > 0) domTodayRate = ((domTodayProfitNum / domBfdyAsset) * 100).toFixed(2);
+    else domTodayRate = "0.00";
+  }
 
-  // 해외 총 평가 금액 (USD)
+  // 국내 누적 수익률
+  let domTotalRate = balance?.output2?.[0]?.evlu_pfls_rt || "0.00";
+  if ((domTotalRate === "0.00" || domTotalRate === "0") && domTotalProfitNum !== 0) {
+    if (domPchsAmtSum > 0) domTotalRate = ((domTotalProfitNum / domPchsAmtSum) * 100).toFixed(2);
+  }
+
+  // --- 해외 자산 데이터 가공 ---
   const overseasAssetUSD = overseasBalance?.output2?.tot_evlu_pfls_amt
     ? Number(overseasBalance.output2.tot_evlu_pfls_amt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "???";
+    : "0.00";
 
-  // 해외 수익금/수익률
-  const overseasProfitUSD = overseasBalance?.output2?.ovrs_tot_pfls; // 총 손익
-  const isPositiveOverseas = Number(overseasProfitUSD) > 0;
+  let ovrsTodayProfitNum = 0;
+  let ovrsTotalProfitNum = Number(overseasBalance?.output2?.ovrs_tot_pfls || 0);
+  let ovrsPchsAmtSum = Number(overseasBalance?.output2?.tot_pchs_amt || 0);
+
+  if (overseasBalance?.output1 && Array.isArray(overseasBalance.output1)) {
+    let sumToday = 0;
+    let sumTotal = 0;
+    let sumPchs = 0;
+    overseasBalance.output1.forEach((item: any) => {
+      const qty = Number(item.ovrs_cblc_qty || 0);
+      if (qty > 0) {
+        // 실시간 시세 데이터가 있으면 우선 사용, 없으면 잔고 데이터 사용
+        const realChange = holdingPrices[item.ovrs_pdno]?.change;
+        const dailyChange = realChange !== undefined ? Number(realChange) : Number(item.prdy_vrss || 0);
+
+        sumToday += (dailyChange * qty);
+        sumTotal += Number(item.evlu_pfls_amt || 0);
+        sumPchs += (Number(item.pchs_avg_pric || 0) * qty);
+      }
+    });
+    ovrsTodayProfitNum = sumToday; // 해외 오늘 손익은 계산값이 더 정확함
+    if (ovrsTotalProfitNum === 0) ovrsTotalProfitNum = sumTotal;
+    if (ovrsPchsAmtSum === 0) ovrsPchsAmtSum = sumPchs;
+  }
+  
+  // 해외 수익률 계산
+  const ovrsEvalAmt = Number(overseasBalance?.output2?.tot_evlu_pfls_amt || 0);
+  const ovrsTodayRate = ovrsEvalAmt > 0 ? ((ovrsTodayProfitNum / (ovrsEvalAmt - ovrsTodayProfitNum)) * 100).toFixed(2) : "0.00";
+  let ovrsTotalRate = overseasBalance?.output2?.tot_pftrt ? Number(overseasBalance.output2.tot_pftrt).toFixed(2) : "0.00";
+  if ((ovrsTotalRate === "0.00" || ovrsTotalRate === "0") && ovrsTotalProfitNum !== 0 && ovrsPchsAmtSum > 0) {
+    ovrsTotalRate = ((ovrsTotalProfitNum / ovrsPchsAmtSum) * 100).toFixed(2);
+  }
 
   // 국내/해외 통합 보유 종목 리스트 가공
   const holdings = useMemo(() => {
@@ -265,8 +343,30 @@ export default function Home() {
         }
       });
     }
-    return list.sort((a, b) => (b.eval || 0) - (a.eval || 0));
-  }, [balance, overseasBalance, holdingPrices]);
+    const sortData = (data: any[], config: { key: string, direction: 'asc' | 'desc' }) => {
+      return [...data].sort((a, b) => {
+        let aVal = a[config.key];
+        let bVal = b[config.key];
+
+        if (['price', 'dailyChange', 'dailyRate', 'eval', 'evalUSD', 'pnl', 'qty'].includes(config.key)) {
+          aVal = Number(String(aVal).replace(/[^0-9.-]/g, '')) || 0;
+          bVal = Number(String(bVal).replace(/[^0-9.-]/g, '')) || 0;
+        }
+
+        if (aVal < bVal) return config.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return config.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    };
+
+    const domestic = list.filter(i => i.type === 'Domestic');
+    const overseas = list.filter(i => i.type === 'Overseas');
+
+    return {
+      domestic: sortData(domestic, domesticSortConfig),
+      overseas: sortData(overseas, overseasSortConfig)
+    };
+  }, [balance, overseasBalance, holdingPrices, domesticSortConfig, overseasSortConfig]);
 
   return (
     <div className={styles.container}>
@@ -359,21 +459,45 @@ export default function Home() {
           ) : (
             <div className={styles.assetValue}>₩ {totalAsset}</div>
           )}
-          <div className={styles.assetChange} style={{ color: isPositive ? 'var(--danger-color)' : 'var(--accent-color)' }}>
-            {totalProfitLoss} ({profitRate}%) <span>오늘</span>
+
+          <div style={{ display: 'flex', gap: '20px', marginTop: '5px' }}>
+            <div>
+              <div className={styles.assetChangeLabel}>오늘</div>
+              <div className={styles.assetChange} style={{ color: domTodayProfitNum > 0 ? 'var(--danger-color)' : domTodayProfitNum < 0 ? 'var(--accent-color)' : 'inherit' }}>
+                {domTodayProfitNum > 0 ? '+' : ''}{domTodayProfitNum.toLocaleString()}원 ({domTodayRate}%)
+              </div>
+            </div>
+            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '20px' }}>
+              <div className={styles.assetChangeLabel}>누적</div>
+              <div className={styles.assetChange} style={{ color: domTotalProfitNum > 0 ? 'var(--danger-color)' : domTotalProfitNum < 0 ? 'var(--accent-color)' : 'inherit' }}>
+                {domTotalProfitNum > 0 ? '+' : ''}{domTotalProfitNum.toLocaleString()}원 ({domTotalRate}%)
+              </div>
+            </div>
           </div>
 
-          <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '20px' }}>
+          <div style={{ marginTop: '25px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '20px' }}>
             <h3 className={styles.widgetTitle} style={{ fontSize: '1rem', marginBottom: '10px' }}>해외 자산 평가액</h3>
             {loading ? (
               <div className={styles.assetValue} style={{ fontSize: '1.5rem' }}>불러오는 중...</div>
             ) : (
               <div className={styles.assetValue} style={{ fontSize: '1.5rem', color: '#00d2ff' }}>
-                $ {overseasAssetUSD !== "???" ? overseasAssetUSD : "0.00"}
+                $ {overseasAssetUSD}
               </div>
             )}
-            <div className={styles.assetChange} style={{ fontSize: '0.9rem', color: isPositiveOverseas ? 'var(--danger-color)' : 'var(--accent-color)' }}>
-              {isPositiveOverseas ? '+' : ''}{Number(overseasProfitUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({overseasBalance?.output2?.tot_pftrt ? Number(overseasBalance.output2.tot_pftrt).toFixed(2) : "0.00"}%) <span>누적</span>
+
+            <div style={{ display: 'flex', gap: '20px', marginTop: '5px' }}>
+              <div>
+                <div className={styles.assetChangeLabel}>어제</div>
+                <div className={styles.assetChange} style={{ fontSize: '0.9rem', color: ovrsTodayProfitNum > 0 ? 'var(--danger-color)' : ovrsTodayProfitNum < 0 ? 'var(--accent-color)' : 'inherit' }}>
+                  {ovrsTodayProfitNum > 0 ? '+$' : ovrsTodayProfitNum < 0 ? '-$' : '$'}{Math.abs(ovrsTodayProfitNum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({ovrsTodayRate}%)
+                </div>
+              </div>
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '20px' }}>
+                <div className={styles.assetChangeLabel}>누적</div>
+                <div className={styles.assetChange} style={{ fontSize: '0.9rem', color: ovrsTotalProfitNum > 0 ? 'var(--danger-color)' : ovrsTotalProfitNum < 0 ? 'var(--accent-color)' : 'inherit' }}>
+                  {ovrsTotalProfitNum > 0 ? '+$' : ovrsTotalProfitNum < 0 ? '-$' : '$'}{Math.abs(ovrsTotalProfitNum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({ovrsTotalRate}%)
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -426,62 +550,114 @@ export default function Home() {
           <h3 className={styles.widgetTitle}>상세 보유 종목 현황</h3>
           {loading ? (
             <div className={styles.placeholder}>목록을 불러오는 중입니다...</div>
-          ) : holdings.length === 0 ? (
+          ) : (holdings.domestic.length === 0 && holdings.overseas.length === 0) ? (
             <div className={styles.emptyState}>보유 중인 종목이 없습니다.</div>
           ) : (
             <div className={styles.holdingsTableWrapper}>
               <table className={styles.holdingsTable}>
-                <thead>
-                  <tr>
-                    <th>구분</th>
-                    <th>종목명</th>
-                    <th>현재가</th>
-                    <th>전일대비</th>
-                    <th>보유수량</th>
-                    <th>평가금액</th>
-                    <th>수익률</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {holdings.map((item, idx) => (
-                    <tr key={idx} style={{
-                      backgroundColor: item.type === 'Domestic' ? 'rgba(67, 97, 238, 0.03)' : 'rgba(247, 37, 133, 0.03)',
-                      borderLeft: `3px solid ${item.type === 'Domestic' ? '#4361ee' : '#f72585'}`
-                    }}>
-                      <td>
-                        <span className={`${styles.stockTypeTag} ${item.type === 'Domestic' ? styles.domesticTag : styles.overseasTag}`}>
-                          {item.type === 'Domestic' ? '국내' : '해외'}
-                        </span>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{item.name}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {item.type === 'Domestic'
-                          ? `${Number(item.price).toLocaleString()}원`
-                          : `$${Number(item.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        }
-                      </td>
-                      <td style={{
-                        color: Number(item.dailyRate) > 0 ? 'var(--danger-color)' : Number(item.dailyRate) < 0 ? 'var(--accent-color)' : 'inherit',
-                        fontWeight: 600
-                      }}>
-                        {Number(item.dailyRate) > 0 ? '▲' : Number(item.dailyRate) < 0 ? '▼' : ''}
-                        {item.type === 'Domestic'
-                          ? `${Math.abs(Number(item.dailyChange)).toLocaleString()}원`
-                          : `$${Math.abs(Number(item.dailyChange)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        } ({item.dailyRate}%)
-                      </td>
-                      <td>{Number(item.qty).toLocaleString()}</td>
-                      <td>
-                        {item.type === 'Domestic'
-                          ? `${item.eval.toLocaleString()}원`
-                          : `$${(item.evalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        }
-                      </td>
-                      <td style={{ color: Number(item.pnl) > 0 ? 'var(--danger-color)' : Number(item.pnl) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 700 }}>
-                        {Number(item.pnl) > 0 ? '+' : ''}{item.pnl}%
-                      </td>
-                    </tr>
-                  ))}
+                  {/* Domestic Section */}
+                  {holdings.domestic.length > 0 && (
+                    <>
+                      <tr className={`${styles.categoryHeader} ${styles.domestic}`}>
+                        <td colSpan={7}>국내 보유 종목 ({holdings.domestic.length})</td>
+                      </tr>
+                      {/* Domestic Sub-Header */}
+                      <tr>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('type')}>
+                          구분 {domesticSortConfig.key === 'type' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('name')}>
+                          종목명 {domesticSortConfig.key === 'name' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('price')}>
+                          현재가 {domesticSortConfig.key === 'price' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('dailyRate')}>
+                          전일대비 {domesticSortConfig.key === 'dailyRate' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('qty')}>
+                          보유수량 {domesticSortConfig.key === 'qty' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('eval')}>
+                          평가금액 {domesticSortConfig.key === 'eval' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleDomesticSort('pnl')}>
+                          수익률 {domesticSortConfig.key === 'pnl' && <span className={styles.sortIcon + ' ' + styles.active}>{domesticSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                      </tr>
+                      {holdings.domestic.map((item, idx) => (
+                        <tr key={`dom-${idx}`} style={{ borderLeft: `3px solid #4361ee` }}>
+                          <td><span className={`${styles.stockTypeTag} ${styles.domesticTag}`}>국내</span></td>
+                          <td style={{ fontWeight: 600 }}>{item.name}</td>
+                          <td style={{ fontWeight: 600 }}>{Number(item.price).toLocaleString()}원</td>
+                          <td style={{ color: Number(item.dailyRate) > 0 ? 'var(--danger-color)' : Number(item.dailyRate) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 600 }}>
+                            {Number(item.dailyRate) > 0 ? '▲' : Number(item.dailyRate) < 0 ? '▼' : ''}
+                            {Math.abs(Number(item.dailyChange)).toLocaleString()}원 ({item.dailyRate}%)
+                          </td>
+                          <td>{Number(item.qty).toLocaleString()}</td>
+                          <td>{item.eval.toLocaleString()}원</td>
+                          <td style={{ color: Number(item.pnl) > 0 ? 'var(--danger-color)' : Number(item.pnl) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 700 }}>
+                            {Number(item.pnl) > 0 ? '+' : ''}{item.pnl}%
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Spacer Row if both exist */}
+                  {holdings.domestic.length > 0 && holdings.overseas.length > 0 && (
+                    <tr style={{ height: '32px' }}><td colSpan={7}></td></tr>
+                  )}
+
+                  {/* Overseas Section */}
+                  {holdings.overseas.length > 0 && (
+                    <>
+                      <tr className={`${styles.categoryHeader} ${styles.overseas}`}>
+                        <td colSpan={7}>해외 보유 종목 ({holdings.overseas.length})</td>
+                      </tr>
+                      {/* Overseas Sub-Header */}
+                      <tr>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('type')}>
+                          구분 {overseasSortConfig.key === 'type' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('name')}>
+                          종목명 {overseasSortConfig.key === 'name' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('price')}>
+                          현재가 {overseasSortConfig.key === 'price' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('dailyRate')}>
+                          전일대비 {overseasSortConfig.key === 'dailyRate' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('qty')}>
+                          보유수량 {overseasSortConfig.key === 'qty' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('evalUSD')}>
+                          평가금액 {overseasSortConfig.key === 'evalUSD' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                        <th className={styles.sortableHeader} onClick={() => handleOverseasSort('pnl')}>
+                          수익률 {overseasSortConfig.key === 'pnl' && <span className={styles.sortIcon + ' ' + styles.active}>{overseasSortConfig.direction === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                      </tr>
+                      {holdings.overseas.map((item, idx) => (
+                        <tr key={`ovr-${idx}`} style={{ borderLeft: `3px solid #f72585` }}>
+                          <td><span className={`${styles.stockTypeTag} ${styles.overseasTag}`}>해외</span></td>
+                          <td style={{ fontWeight: 600 }}>{item.name}</td>
+                          <td style={{ fontWeight: 600 }}>${Number(item.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ color: Number(item.dailyRate) > 0 ? 'var(--danger-color)' : Number(item.dailyRate) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 600 }}>
+                            {Number(item.dailyRate) > 0 ? '▲' : Number(item.dailyRate) < 0 ? '▼' : ''}
+                            ${Math.abs(Number(item.dailyChange)).toLocaleString('en-US', { minimumFractionDigits: 2 })} ({item.dailyRate}%)
+                          </td>
+                          <td>{Number(item.qty).toLocaleString()}</td>
+                          <td>${(item.evalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ color: Number(item.pnl) > 0 ? 'var(--danger-color)' : Number(item.pnl) < 0 ? 'var(--accent-color)' : 'inherit', fontWeight: 700 }}>
+                            {Number(item.pnl) > 0 ? '+' : ''}{item.pnl}%
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
