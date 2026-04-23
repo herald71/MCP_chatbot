@@ -79,7 +79,7 @@ export function getAccountKeys(cano: string) {
 const cachedTokens: Record<string, { token: string, expiresAt: number }> = {};
 const tokenFetchPromises: Record<string, Promise<string> | null> = {};
 
-export async function getKisToken(appkey?: string, appsecret?: string, retryCount = 0): Promise<string> {
+export async function getKisToken(appkey?: string, appsecret?: string, retryCount = 0, forceRefresh = false): Promise<string> {
     const finalKey = appkey || configInfo?.my_app;
     const finalSecret = appsecret || configInfo?.my_sec;
 
@@ -91,24 +91,28 @@ export async function getKisToken(appkey?: string, appsecret?: string, retryCoun
     const tokenCachePath = path.resolve(`.kis_token_${keyHash}.json`);
     const now = Date.now();
 
-    // 1. 파일 캐시 확인
-    try {
-        if (fs.existsSync(tokenCachePath)) {
-            const cache = JSON.parse(fs.readFileSync(tokenCachePath, 'utf8'));
-            if (cache.token && cache.expiresAt > now) {
-                return cache.token;
+    if (!forceRefresh) {
+        // 1. 파일 캐시 확인
+        try {
+            if (fs.existsSync(tokenCachePath)) {
+                const cache = JSON.parse(fs.readFileSync(tokenCachePath, 'utf8'));
+                if (cache.token && cache.expiresAt > now) {
+                    return cache.token;
+                }
             }
+        } catch (e) {
+            console.error(`Token cache read error (${keyHash}):`, e);
         }
-    } catch (e) {
-        console.error(`Token cache read error (${keyHash}):`, e);
-    }
 
-    // 2. 메모리 캐시 확인
-    if (cachedTokens[keyHash] && now < cachedTokens[keyHash].expiresAt) {
-        return cachedTokens[keyHash].token;
-    }
-    if (tokenFetchPromises[keyHash]) {
-        return tokenFetchPromises[keyHash]!;
+        // 2. 메모리 캐시 확인
+        if (cachedTokens[keyHash] && now < cachedTokens[keyHash].expiresAt) {
+            return cachedTokens[keyHash].token;
+        }
+        if (tokenFetchPromises[keyHash]) {
+            return tokenFetchPromises[keyHash]!;
+        }
+    } else {
+        console.log(`[KIS API] Force refreshing token for ${keyHash}...`);
     }
 
     const fetchToken = async () => {

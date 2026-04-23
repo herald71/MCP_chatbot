@@ -23,23 +23,37 @@ export async function GET(request: Request) {
 
     try {
         // 1. KIS 인증 토큰 발급 (캐싱 전략 사용)
-        const accessToken = await getKisToken(appkey, appsecret);
+        let accessToken = await getKisToken(appkey, appsecret);
 
         // 2. 실전투자 계좌 잔고조회 호출 (inquire_balance - API DOC 참조)
         const tr_id = 'TTTC8434R'; // 실전 주식잔고조회 TR_ID
+        const apiPath = '/uapi/domestic-stock/v1/trading/inquire-balance';
+        const queryParams = `CANO=${CANO}&ACNT_PRDT_CD=${ACNT_PRDT_CD}&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00&CTX_AREA_FK100=&CTX_AREA_NK100=`;
+        
+        const callApi = async (token: string) => {
+            return fetch(`${URL_BASE || KIS_REAL_BASE_URL}${apiPath}?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'authorization': `Bearer ${token}`,
+                    'appkey': appkey,
+                    'appsecret': appsecret,
+                    'tr_id': tr_id,
+                }
+            });
+        };
 
-        const balanceRes = await fetch(`${URL_BASE || KIS_REAL_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance?CANO=${CANO}&ACNT_PRDT_CD=${ACNT_PRDT_CD}&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00&CTX_AREA_FK100=&CTX_AREA_NK100=`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-                'appkey': appkey,
-                'appsecret': appsecret,
-                'tr_id': tr_id,
-            }
-        });
+        let balanceRes = await callApi(accessToken);
+        let balanceData = await balanceRes.json();
 
-        const balanceData = await balanceRes.json();
+        // 토큰 만료 에러(EGW00123) 발생 시 1회 강제 갱신 후 재시도
+        if (balanceData.msg_cd === 'EGW00123') {
+            console.log(`[Balance API] Token expired for ${CANO}. Refreshing and retrying...`);
+            accessToken = await getKisToken(appkey, appsecret, 0, true);
+            balanceRes = await callApi(accessToken);
+            balanceData = await balanceRes.json();
+        }
+
         console.log(`[Balance API] KIS Response for ${CANO}:`, balanceData.rt_cd, balanceData.msg_cd, balanceData.msg1);
         return NextResponse.json(balanceData);
 

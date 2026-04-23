@@ -61,26 +61,54 @@ export async function GET(request: Request) {
             fs.appendFileSync(logFile, `[${new Date().toISOString()}] REQ: ${type} ${stockCode} (EXCD:${excdParam}) TR:${tr_id}\n`);
         } catch (e) { }
 
-        const priceRes = await fetch(apiURL, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'authorization': `Bearer ${access_token}`,
-                'appkey': APP_KEY,
-                'appsecret': APP_SECRET,
-                'tr_id': tr_id,
-            }
-        });
+        const callApi = async (token: string) => {
+            return fetch(apiURL, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'authorization': `Bearer ${token}`,
+                    'appkey': APP_KEY,
+                    'appsecret': APP_SECRET,
+                    'tr_id': tr_id,
+                }
+            });
+        };
+
+        let priceRes = await callApi(access_token);
 
         if (!priceRes.ok) {
             const errorBody = await priceRes.text();
-            try {
-                fs.appendFileSync(logFile, `[${new Date().toISOString()}] ERR: ${stockCode} Status:${priceRes.status} Body:${errorBody}\n`);
-            } catch (e) { }
-            throw new Error(`현재가 API 오류: ${errorBody}`);
+            
+            // 만약 에러 바디에 EGW00123이 포함되어 있다면 토큰 갱신 후 재시도
+            if (errorBody.includes('EGW00123')) {
+                console.log(`[Price API] Token expired for ${stockCode}. Refreshing and retrying...`);
+                const newToken = await getKisToken(undefined, undefined, 0, true);
+                priceRes = await callApi(newToken);
+                if (!priceRes.ok) {
+                    const retryErrorBody = await priceRes.text();
+                    try {
+                        fs.appendFileSync(logFile, `[${new Date().toISOString()}] ERR: ${stockCode} Status:${priceRes.status} Body:${retryErrorBody}\n`);
+                    } catch (e) { }
+                    throw new Error(`현재가 API 재시도 오류: ${retryErrorBody}`);
+                }
+            } else {
+                try {
+                    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ERR: ${stockCode} Status:${priceRes.status} Body:${errorBody}\n`);
+                } catch (e) { }
+                throw new Error(`현재가 API 오류: ${errorBody}`);
+            }
         }
 
         const priceData = await priceRes.json();
+
+        // 성공 응답 내에서도 EGW00123이 있을 수 있음
+        if (priceData.msg_cd === 'EGW00123') {
+            console.log(`[Price API] Token expired in JSON for ${stockCode}. Refreshing and retrying...`);
+            const newToken = await getKisToken(undefined, undefined, 0, true);
+            const retryRes = await callApi(newToken);
+            const retryData = await retryRes.json();
+            return NextResponse.json(retryData);
+        }
 
         try {
             fs.appendFileSync(logFile, `[${new Date().toISOString()}] RES: ${stockCode} RT_CD:${priceData.rt_cd} Last:${priceData.output?.last || priceData.output?.stck_prpr}\n`);

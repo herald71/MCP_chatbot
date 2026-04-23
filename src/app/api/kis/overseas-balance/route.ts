@@ -19,23 +19,37 @@ export async function GET(request: Request) {
 
     try {
         // 1. KIS 인증 토큰 발급 (캐싱 전략 사용)
-        const accessToken = await getKisToken(appkey, appsecret);
+        let accessToken = await getKisToken(appkey, appsecret);
 
         // 2. 실전투자 해외 주식 잔고조회 호출 (inquire_balance)
         const tr_id = 'JTTT3012R'; // 해외주식 잔고 (실전)
+        const apiPath = '/uapi/overseas-stock/v1/trading/inquire-balance';
+        const queryParams = `CANO=${CANO}&ACNT_PRDT_CD=${ACNT_PRDT_CD}&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=`;
 
-        const balanceRes = await fetch(`${URL_BASE}/uapi/overseas-stock/v1/trading/inquire-balance?CANO=${CANO}&ACNT_PRDT_CD=${ACNT_PRDT_CD}&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-                'appkey': appkey,
-                'appsecret': appsecret,
-                'tr_id': tr_id,
-            }
-        });
+        const callApi = async (token: string) => {
+            return fetch(`${URL_BASE}${apiPath}?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'authorization': `Bearer ${token}`,
+                    'appkey': appkey,
+                    'appsecret': appsecret,
+                    'tr_id': tr_id,
+                }
+            });
+        };
 
-        const balanceData = await balanceRes.json();
+        let balanceRes = await callApi(accessToken);
+        let balanceData = await balanceRes.json();
+
+        // 토큰 만료 에러(EGW00123) 발생 시 1회 강제 갱신 후 재시도
+        if (balanceData.msg_cd === 'EGW00123') {
+            console.log(`[Overseas Balance API] Token expired for ${CANO}. Refreshing and retrying...`);
+            accessToken = await getKisToken(appkey, appsecret, 0, true);
+            balanceRes = await callApi(accessToken);
+            balanceData = await balanceRes.json();
+        }
+
         console.log(`[Overseas Balance API] KIS Response for ${CANO}:`, balanceData.rt_cd, balanceData.msg_cd, balanceData.msg1);
         return NextResponse.json(balanceData);
 
